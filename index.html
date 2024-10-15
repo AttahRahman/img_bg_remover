@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Background Remover</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+    }
+    #uploaded-image, #output-canvas {
+      max-width: 80%;
+      margin: 10px;
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .btn:disabled {
+      background-color: grey;
+      cursor: not-allowed;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+</head>
+<body>
+
+  <h1>Smart Background Remover</h1>
+
+  <input type="file" id="image-input" accept="image/*" class="btn">
+  <br>
+  <img id="uploaded-image" alt="Uploaded Image" style="display: none;">
+  <br>
+  <canvas id="output-canvas"></canvas>
+  <br>
+  <button id="download-btn" class="btn" style="display: none;">Download Processed Image</button>
+
+  <script>
+    const imageInput = document.getElementById('image-input');
+    const uploadedImage = document.getElementById('uploaded-image');
+    const outputCanvas = document.getElementById('output-canvas');
+    const downloadButton = document.getElementById('download-btn');
+    
+    let originalImage = null;
+
+    imageInput.addEventListener('change', async function() {
+      if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          uploadedImage.src = e.target.result;
+          uploadedImage.style.display = 'block';
+        };
+        reader.readAsDataURL(this.files[0]);
+        
+        await processImage();
+      }
+    });
+
+    async function processImage() {
+      const img = uploadedImage;
+      
+      // Load BodyPix Model
+      const net = await bodyPix.load();
+      
+      // Perform segmentation on the uploaded image
+      const segmentation = await net.segmentPerson(img);
+      
+      // Create a canvas to draw the masked image
+      const canvas = outputCanvas;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+
+      // Get image data from original image
+      ctx.drawImage(img, 0, 0, img.width, img.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      const pixels = imageData.data;
+
+      // Remove the background by setting alpha (transparency) to 0 for background pixels
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (!segmentation.data[i / 4]) {
+          pixels[i + 3] = 0; // Set alpha to 0 (transparent) for non-human pixels
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      downloadButton.style.display = 'inline-block';
+    }
+
+    downloadButton.addEventListener('click', function() {
+      const link = document.createElement('a');
+      link.download = 'processed-image.png';
+      link.href = outputCanvas.toDataURL();
+      link.click();
+    });
+  </script>
+
+</body>
+</html>
